@@ -118,11 +118,40 @@ ai-community/
 - Cloudflare Tunnel 免费即时隧道（会漂移，正式后绑域名）
 - **禁止频繁重启 Cloudflare Tunnel**——会触发 429 限流，需间隔 3-5 分钟以上
 - WSL 关闭 = 服务宕机，需上云才能 24h 在线
+- **guardian.sh 每 30 分钟自动验证 Tunnel 地址**（2026-07-02 改进）
 
 ## 公网方案
 
-用户访问固定地址 → 页面 fetch discovery.json → 获取当前 Tunnel 地址 → 跳转
+用户访问固定地址 → 读取 discovery.json → 获取当前 Tunnel 地址 → 跳转
 
 1. `~/hermes-discovery/discovery.json` — 存放当前 Tunnel URL
 2. GitHub Pages 提供固定入口：`https://ncnst2026-cell.github.io/ai-community/`
-3. Tunnel 地址变化时，start.sh 自动更新 discovery.json 并 push
+3. Tunnel 地址变化时，guardian.sh 自动更新 discovery.json 并 push
+4. **guardian.sh 每 30 分钟验证一次地址匹配**（2026-07-02 改进）
+
+---
+
+## 更新日志
+
+### 2026-07-02 - guardian.sh 改进
+
+**问题**: guardian.sh 只在 Tunnel 崩溃重启时才更新 discovery.json，如果 Tunnel 正常运行但地址变化（如手动重启），discovery.json 不会同步。
+
+**解决方案**: 添加 `verify_tunnel_url()` 函数，每次循环都验证 Tunnel 地址是否匹配。
+
+**改进内容**:
+- 从 journalctl 读取最近 5 分钟的 Tunnel 地址
+- 比对 discovery.json 中存储的地址
+- 如果不匹配，自动同步并推送
+- 避免不必要的 Tunnel 重启（防止 429 限流）
+
+**测试**:
+```bash
+# 语法检查
+bash -n guardian.sh  # ✅ 通过
+
+# 功能测试
+CURRENT_URL=$(journalctl --user -u ai-community-tunnel.service --since "5 minutes ago" | grep -o "https://[a-z-]*\\.trycloudflare\\.com" | head -1)
+STORED_URL=$(cat /home/lwt/hermes-discovery/discovery.json | grep -o "https://[a-z-]*\\.trycloudflare\\.com" | head -1)
+# 结果：地址一致，无需更新 ✅
+```

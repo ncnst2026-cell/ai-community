@@ -57,7 +57,7 @@ fetch('./discovery.json').then(r=>r.json()).then(d=>{
 - 提供 HTTPS 证书（浏览器不信任，但功能正常）
 - 指向本地 proxy.js 的 3211 端口
 
-### 3. 自动更新链路
+### 4. 自动更新链路
 
 **服务**: ai-community-guardian.service
 **脚本**: ~/ai-community/guardian.sh
@@ -75,12 +75,24 @@ if ! pgrep -f "cloudflared tunnel" > /dev/null; then
   echo "{\"url\":\"$TUNNEL_URL\"}" > discovery.json
   git add -A && git commit -m "auto: tunnel" && git push origin main
 fi
+
+# 每 30 分钟验证 Tunnel 地址是否匹配（2026-07-02 新增）
+verify_tunnel_url() {
+  CURRENT_URL=$(journalctl --user -u ai-community-tunnel.service --since "5 minutes ago" | grep -o "https://[a-z-]*\\.trycloudflare\\.com" | head -1)
+  STORED_URL=$(cat /home/lwt/hermes-discovery/discovery.json | grep -o "https://[a-z-]*\\.trycloudflare\\.com" | head -1)
+  if [ "$CURRENT_URL" != "$STORED_URL" ]; then
+    # 自动同步地址
+    echo "{\"url\":\"$CURRENT_URL\"}" > discovery.json
+    git add -A && git commit -m "auto: tunnel sync" && git push origin main
+  fi
+}
 ```
 
 **触发时机**:
 - guardian.sh 每 30 分钟循环执行
 - WSL 重启后 systemd 自动启动 guardian.service
 - guardian 启动时立即检测 Tunnel 状态
+- **每次循环都会验证 Tunnel 地址是否匹配**（新增）
 
 ### 4. 统一代理入口
 

@@ -54,6 +54,9 @@ start_all() {
 run_tasks() {
   log "执行定时任务..."
   
+  # 验证 Tunnel 地址是否匹配（即使 Tunnel 正常运行）
+  verify_tunnel_url
+  
   # 前沿请求采集（每 3 天一次）
   if [ $((RANDOM % 72)) -eq 0 ]; then
     log "采集前沿文献请求..."
@@ -72,6 +75,36 @@ run_tasks() {
   
   # 新人欢迎（检测是否有 member_id > 上次已知的最大值）
   # 略——可通过 SQLite 查询比对
+}
+
+verify_tunnel_url() {
+  # 获取当前 Tunnel 实际地址
+  CURRENT_URL=$(journalctl --user -u ai-community-tunnel.service --since "5 minutes ago" 2>/dev/null | grep -o "https://[a-z-]*\\.trycloudflare\\.com" | head -1)
+  
+  if [ -z "$CURRENT_URL" ]; then
+    log "⚠️ 无法获取当前 Tunnel 地址，跳过验证"
+    return
+  fi
+  
+  # 读取已存储的地址
+  if [ -f "/home/lwt/hermes-discovery/discovery.json" ]; then
+    STORED_URL=$(cat /home/lwt/hermes-discovery/discovery.json | grep -o "https://[a-z-]*\\.trycloudflare\\.com" | head -1)
+  else
+    STORED_URL=""
+  fi
+  
+  # 比对并更新
+  if [ "$CURRENT_URL" != "$STORED_URL" ]; then
+    log "⚠️ Tunnel 地址不匹配：当前=$CURRENT_URL, 存储=$STORED_URL"
+    cd /home/lwt/hermes-discovery
+    echo "{\"url\":\"$CURRENT_URL\"}" > discovery.json
+    git add -A && git commit -m "auto: tunnel sync $(date +%H:%M)" && \
+      GIT_SSH_COMMAND="ssh -i /home/lwt/.ssh/id_ed25519_org" git push origin main 2>&1 | tee -a "$LOG"
+    cd /home/lwt/ai-community
+    log "✅ Tunnel 地址已同步：$CURRENT_URL"
+  else
+    log "✅ Tunnel 地址一致：$CURRENT_URL"
+  fi
 }
 
 # 主循环：每 30 分钟检测一次
