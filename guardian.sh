@@ -107,9 +107,9 @@ verify_tunnel_url() {
   fi
 }
 
-# 主循环：每 30 分钟检测一次
+# 主循环：每 30 秒检测一次
 while true; do
   start_all
   run_tasks
-  sleep 1800  # 30 分钟
+  sleep 30  # 30 秒
 done

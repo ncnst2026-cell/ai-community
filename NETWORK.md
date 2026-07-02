@@ -89,7 +89,7 @@ verify_tunnel_url() {
 ```
 
 **触发时机**:
-- guardian.sh 每 30 分钟循环执行
+- guardian.sh 每 **30 秒** 循环执行
 - WSL 重启后 systemd 自动启动 guardian.service
 - guardian 启动时立即检测 Tunnel 状态
 - **每次循环都会验证 Tunnel 地址是否匹配**（新增）
